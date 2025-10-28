@@ -57,8 +57,12 @@ class CursorStore:
             row = cursor.fetchone()
             
             if row and row[0]:
+                replay_id = row[0]
+                # Snowflake returns bytearray, but gRPC needs bytes
+                if isinstance(replay_id, bytearray):
+                    replay_id = bytes(replay_id)
                 logging.debug("Retrieved replay_id for topic %s from Snowflake", topic)
-                return row[0]
+                return replay_id
             else:
                 logging.debug("No replay_id found for topic %s in Snowflake", topic)
                 return None
@@ -117,7 +121,16 @@ class CursorStore:
         try:
             cursor.execute("SELECT topic, replay_id FROM cursor_store")
             rows = cursor.fetchall()
-            result = {row[0]: row[1] for row in rows if row[1]}
+            
+            # Convert bytearray to bytes (Snowflake returns bytearray, gRPC needs bytes)
+            result = {}
+            for row in rows:
+                if row[1]:
+                    replay_id = row[1]
+                    if isinstance(replay_id, bytearray):
+                        replay_id = bytes(replay_id)
+                    result[row[0]] = replay_id
+            
             logging.info("Retrieved %d cursors from Snowflake in batch", len(result))
             return result
         except Exception as e:
@@ -147,7 +160,15 @@ class CursorStore:
             
             cursor.execute(query, topics)
             rows = cursor.fetchall()
-            result = {row[0]: row[1] for row in rows if row[1]}
+            
+            # Convert bytearray to bytes (Snowflake returns bytearray, gRPC needs bytes)
+            result = {}
+            for row in rows:
+                if row[1]:
+                    replay_id = row[1]
+                    if isinstance(replay_id, bytearray):
+                        replay_id = bytes(replay_id)
+                    result[row[0]] = replay_id
             
             logging.info("Retrieved %d cursors for %d topics from Snowflake in single query", 
                         len(result), len(topics))
