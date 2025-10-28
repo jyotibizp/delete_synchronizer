@@ -1,0 +1,152 @@
+import datetime
+import logging
+import azure.functions as func
+
+from src.config.settings import get_settings
+from src.salesforce.auth import create_jwt_assertion, get_access_token
+from src.salesforce.pubsub_client import fetch_events_via_pubsub
+from src.replay.cursor_store import CursorStore
+from src.mock_events import load_mock_events_for_topic
+from src.snowflake.connector import SnowflakeConnector
+from src.utils.transform import transform_for_snowflake
+
+
+def main(myTimer: func.TimerRequest) -> None:
+    if myTimer.past_due:
+        logging.info("The timer is past due!")
+
+    utc_timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+    logging.info("Salesforce Delete Synchronizer started at %s", utc_timestamp)
+
+    settings = get_settings()
+
+    # Check if running in mock mode
+    if settings.mock_mode:
+        logging.info("Running in MOCK MODE - using mock data from %s", settings.mock_data_dir)
+        access_token, instance_url, tenant_id = None, None, None
+    else:
+        # Authenticate to Salesforce
+        assertion = create_jwt_assertion(
+            client_id=settings.sf_client_id,
+            username=settings.sf_username,
+            audience=settings.sf_audience,
+            private_key_path=settings.sf_private_key_path,
+        )
+        access_token, instance_url, tenant_id = get_access_token(settings.sf_login_url, assertion)
+        logging.info("Authenticated to Salesforce - Org ID: %s", tenant_id)
+
+    # Connect to Snowflake (used for both cursor storage and event insertion)
+    snowflake_conn = SnowflakeConnector(
+        account=settings.snowflake_account,
+        user=settings.snowflake_user,
+        private_key_path=settings.snowflake_private_key_path,
+        warehouse=settings.snowflake_warehouse,
+        database=settings.snowflake_database,
+        schema=settings.snowflake_schema,
+        table=settings.snowflake_table,
+    )
+    
+    try:
+        snowflake_conn.connect()
+        snowflake_conn.ensure_table_exists()
+        
+        # Initialize cursor store with Snowflake connection
+        cursor_store = CursorStore(snowflake_conn.connection)
+        logging.info("Initialized cursor store in Snowflake")
+
+        # Fetch all cursors for configured topics in a single query (performance optimization)
+        cursors = cursor_store.get_cursors_for_topics(settings.sf_topic_names)
+        logging.info("Fetched cursors for %d/%d topics", len(cursors), len(settings.sf_topic_names))
+
+        collected = []
+        latest_per_topic: dict[str, bytes] = {}
+
+        # Subscribe to each topic via Pub/Sub API or use mock data
+        for topic in settings.sf_topic_names:
+            replay_id = cursors.get(topic)  # Lookup from pre-fetched dictionary
+            
+            if replay_id:
+                logging.info("Found existing replay_id for topic %s (length: %d bytes)", topic, len(replay_id))
+            else:
+                logging.info("No replay_id found for topic %s - will fetch from EARLIEST", topic)
+
+            try:
+                if settings.mock_mode:
+                    # Load mock events from JSON files
+                    logging.info("Loading mock events for %s", topic)
+                    events = load_mock_events_for_topic(settings.mock_data_dir, topic)
+                else:
+                    # Fetch events via Pub/Sub API
+                    if replay_id:
+                        logging.info("Resuming subscription to %s from saved replay_id", topic)
+                    else:
+                        logging.info("Starting new subscription to %s (no replay_id, will use EARLIEST)", topic)
+                    
+                    logging.info("=" * 80)
+                    logging.info("CALLING fetch_events_via_pubsub for topic: %s", topic)
+                    logging.info("  - access_token: %s", "Present (%d chars)" % len(access_token) if access_token else "MISSING")
+                    logging.info("  - instance_url: %s", instance_url)
+                    logging.info("  - tenant_id: %s", tenant_id)
+                    logging.info("  - replay_id: %s", "Present (%d bytes)" % len(replay_id) if replay_id else "None")
+                    logging.info("  - max_events: 100")
+                    logging.info("=" * 80)
+                    
+                    events = fetch_events_via_pubsub(
+                        access_token=access_token,
+                        instance_url=instance_url,
+                        tenant_id=tenant_id,
+                        topic_name=topic,
+                        replay_id=replay_id,
+                        max_events=100,
+                    )
+                    
+                    logging.info("=" * 80)
+                    logging.info("RETURNED from fetch_events_via_pubsub")
+                    logging.info("  - events type: %s", type(events).__name__)
+                    logging.info("  - events count: %d", len(events) if events else 0)
+                    if events:
+                        logging.info("  - first event keys: %s", list(events[0].keys()) if events else "N/A")
+                    logging.info("=" * 80)
+
+                for event in events:
+                    collected.append(event)
+                    # Track latest replay_id for this topic
+                    latest_per_topic[topic] = event["replay_id"]
+
+                logging.info("Fetched %d events from topic %s", len(events), topic)
+
+            except Exception as e:
+                logging.error("Error fetching events from topic %s: %s", topic, e)
+                continue
+
+        if collected:
+            # Transform events for Snowflake
+            snowflake_events = transform_for_snowflake(collected)
+            logging.info("Transformed %d events for Snowflake", len(snowflake_events))
+            
+            # Insert events to Snowflake
+            try:
+                inserted = snowflake_conn.insert_events(snowflake_events)
+                logging.info("Successfully inserted %d events into Snowflake %s.%s.%s", 
+                            inserted, 
+                            settings.snowflake_database, 
+                            settings.snowflake_schema, 
+                            settings.snowflake_table)
+            except Exception as e:
+                logging.error("Error inserting events to Snowflake: %s", e)
+                # Don't update cursors if insert failed
+                raise
+        else:
+            logging.info("No new events to process.")
+
+        # Update cursors in Snowflake (only if we successfully processed events or had no errors)
+        for topic, replay_id in latest_per_topic.items():
+            cursor_store.set(topic, replay_id)
+            
+    except Exception as e:
+        logging.error("Fatal error in synchronizer: %s", e)
+        raise
+    finally:
+        snowflake_conn.close()
+
+    logging.info("Salesforce Delete Synchronizer completed at %s", datetime.datetime.utcnow().isoformat())

@@ -1,0 +1,27 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "PYTHON_ENABLE_WORKER_EXTENSIONS": "1",
+
+    "SF_CLIENT_ID": "<salesforce_connected_app_client_id>",
+    "SF_USERNAME": "<salesforce_user_email>",
+    "SF_LOGIN_URL": "https://login.salesforce.com",
+    "SF_AUDIENCE": "https://login.salesforce.com",
+    "SF_PRIVATE_KEY_PATH": "certs/private.key",
+    "SF_TOPIC_NAMES": "/event/Account_Delete__e,/event/ActivityContent_Delete__e,/event/Contact_Delete__e,/event/Event_Delete__e,/event/Fund_Delete__e,/event/Investment_Delete__e,/event/LegalEntity_Delete__e,/event/LP_Consultant_Relationship_Delete__e,/event/Opportunity_Delete__e,/event/Task_Delete__e",
+
+    "SNOWFLAKE_ACCOUNT": "<snowflake_account>.snowflakecomputing.com",
+    "SNOWFLAKE_USER": "<snowflake_username>",
+    "SNOWFLAKE_PRIVATE_KEY_PATH": "certs/rsa_key.p8",
+    "SNOWFLAKE_WAREHOUSE": "COMPUTE_WH",
+    "SNOWFLAKE_DATABASE": "YOUR_DATABASE",
+    "SNOWFLAKE_SCHEMA": "PUBLIC",
+    "SNOWFLAKE_TABLE": "delete_tracker",
+
+    "MOCK_MODE": "false",
+    "MOCK_DATA_DIR": "mock_data"
+  }
+}
+
