@@ -1,0 +1,5 @@
+azure-functions==1.18.0
+snowflake-connector-python==3.6.0
+sendgrid==6.11.0
+python-dotenv==1.0.0
+

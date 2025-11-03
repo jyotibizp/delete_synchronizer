@@ -1,0 +1,17 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "SNOWFLAKE_ACCOUNT": "your_account",
+    "SNOWFLAKE_USER": "your_user",
+    "SNOWFLAKE_PASSWORD": "your_password",
+    "SNOWFLAKE_WAREHOUSE": "your_warehouse",
+    "SNOWFLAKE_DATABASE": "IC_CRM_DB",
+    "SNOWFLAKE_SCHEMA": "IC_CRM",
+    "SENDGRID_API_KEY": "your_sendgrid_api_key",
+    "SENDER_EMAIL": "notifications@yourcompany.com",
+    "SUBSCRIBER_EMAILS": "email1@example.com,email2@example.com"
+  }
+}
+

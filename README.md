@@ -114,10 +114,18 @@ CREATE TABLE cursor_store (
 - **Salesforce topics:** Comma-separated list of delete event topics
 - **Snowflake credentials:** RSA key authentication (secure, production-ready)
 - **Snowflake target:** Database, schema, table configuration
+- **AzureWebJobsStorage:** Required by Azure Functions runtime (not used by application logic)
+  - Local: Use `UseDevelopmentStorage=true` or leave empty
+  - Azure: Automatically provided during deployment
 
 ### Authentication
 - **Salesforce:** JWT bearer token flow
 - **Snowflake:** RSA key pair (no password needed)
+
+### Note on Storage
+- **Application data:** All stored in Snowflake (events + cursors)
+- **Azure Blob Storage:** NOT used by this application
+- **AzureWebJobsStorage:** Required by Azure Functions runtime infrastructure only
 
 ## Deployment
 
