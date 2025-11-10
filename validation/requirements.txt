@@ -1,0 +1,16 @@
+# Azure Functions
+azure-functions==1.18.0
+
+# Salesforce
+simple-salesforce==1.12.4
+PyJWT==2.8.0
+cryptography==41.0.7
+
+# Snowflake
+snowflake-connector-python==3.6.0
+
+# Data processing
+pandas==2.1.4
+
+# HTTP
+requests==2.31.0

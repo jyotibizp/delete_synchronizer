@@ -1,0 +1,19 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "SF_CLIENT_ID": "your-salesforce-connected-app-client-id",
+    "SF_USERNAME": "your-salesforce-username",
+    "SF_LOGIN_URL": "https://login.salesforce.com",
+    "SF_PRIVATE_KEY": "base64-encoded-private-key-or-pem-content",
+    "SNOWFLAKE_ACCOUNT": "NP91221-IC_IBD_CRM",
+    "SNOWFLAKE_USER": "your-snowflake-username",
+    "SNOWFLAKE_PASSWORD": "your-snowflake-password",
+    "SNOWFLAKE_ROLE": "IC_CRM_DEVELOPER",
+    "SNOWFLAKE_WAREHOUSE": "IC_CRM_WH_XS",
+    "SNOWFLAKE_DATABASE": "IC_CRM_DB",
+    "SNOWFLAKE_SCHEMA": "IC_CRM"
+  }
+}
+
