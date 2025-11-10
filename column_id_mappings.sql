@@ -1,0 +1,10 @@
+Account	ID
+Opportunity	ID
+Contact	CONTACT_ID__C
+Fund	X18_DIGIT_FUND_ID__C
+Task	ID
+Event	ID
+Investment	X18_DIGIT_INVESTMENT_ID__C
+Legal_Entity	X18_DIGIT_LEGAL_ENTITY_ID__C
+LP_Consultant_Relationship	X18_DIGIT_ID__C
+Activity_Content	ACTIVITYID__C
