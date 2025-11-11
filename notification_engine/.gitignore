@@ -17,6 +17,9 @@ __queuestorage__/
 __azurite_db*__.json
 .vscode/
 
+# Environment
+.env
+
 # Logs
 *.log
 

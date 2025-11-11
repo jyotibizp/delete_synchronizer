@@ -62,31 +62,86 @@ pip install -r requirements.txt
 
 ### 2. Configure Settings
 
-Copy `local.settings.example.json` to `local.settings.json` and fill in:
+**Option A: Using .env file (recommended for local testing)**
 
-```json
-{
-  "Values": {
-    "SNOWFLAKE_ACCOUNT": "your_account",
-    "SNOWFLAKE_USER": "your_user",
-    "SNOWFLAKE_PASSWORD": "your_password",
-    "SNOWFLAKE_WAREHOUSE": "your_warehouse",
-    "SNOWFLAKE_DATABASE": "IC_CRM_DB",
-    "SNOWFLAKE_SCHEMA": "IC_CRM",
-    "SENDGRID_API_KEY": "your_sendgrid_api_key",
-    "SENDER_EMAIL": "notifications@yourcompany.com",
-    "SUBSCRIBER_EMAILS": "email1@example.com,email2@example.com"
-  }
-}
+Copy `.env.example` to `.env` and configure:
+
+```bash
+cp .env.example .env
+# Edit .env with your settings
 ```
 
-### 3. Get SendGrid API Key
+**Option B: Using local.settings.json (Azure Functions format)**
 
-1. Sign up at [SendGrid](https://sendgrid.com/)
-2. Create an API key with "Mail Send" permissions
-3. Add to `SENDGRID_API_KEY` in settings
+Copy `local.settings.example.json` to `local.settings.json` and configure:
 
-### 4. Run Locally
+```bash
+cp local.settings.example.json local.settings.json
+# Edit local.settings.json with your settings
+```
+
+**Configuration Example (.env format):**
+
+```bash
+# Snowflake
+SNOWFLAKE_ACCOUNT=your_account
+SNOWFLAKE_USER=your_user
+SNOWFLAKE_PRIVATE_KEY_PATH=/path/to/private_key.pem
+SNOWFLAKE_WAREHOUSE=your_warehouse
+SNOWFLAKE_DATABASE=IC_CRM_DB
+SNOWFLAKE_SCHEMA=IC_CRM
+
+# Email
+SMTP_HOST=smtp.yourcompany.com
+SMTP_PORT=587
+SMTP_USERNAME=your_smtp_username
+SMTP_PASSWORD=your_smtp_password
+SMTP_USE_TLS=true
+SENDER_EMAIL=notifications@yourcompany.com
+SUBSCRIBER_EMAILS=email1@example.com,email2@example.com
+```
+
+### 3. Authentication Setup
+
+#### For SMTP Email
+Contact your IT team for SMTP server details (host, port, credentials).
+
+#### For Snowflake
+1. Generate unencrypted key pair:
+   ```bash
+   openssl genrsa -out rsa_key.pem 2048
+   ```
+2. Extract public key:
+   ```bash
+   openssl rsa -in rsa_key.pem -pubout -out rsa_key.pub
+   ```
+3. Assign public key to Snowflake user:
+   ```sql
+   ALTER USER your_user SET RSA_PUBLIC_KEY='<public_key_content>';
+   ```
+4. Set `SNOWFLAKE_PRIVATE_KEY_PATH` to your `rsa_key.pem` file path
+
+**Note:** The private key must be unencrypted (no passphrase).
+
+### 4. Test Locally (Without Azure Functions)
+
+Run the notification engine directly without deploying:
+
+```bash
+# Test with yesterday's data
+python run_local.py
+
+# Test with specific date
+python run_local.py 2024-01-15
+```
+
+This will:
+- Load settings from `.env` (or `local.settings.json` if `.env` doesn't exist)
+- Fetch data from Snowflake for the specified date
+- Display a preview of the report
+- Send the email via SMTP
+
+### 5. Run as Azure Function Locally
 
 ```bash
 func start
@@ -138,16 +193,45 @@ The email includes:
 | Account     | 100      | 20      | 5       | Success|             |
 | Event       | 50       | 10      | 2       | Failed | Error details|
 
+## Configuration Details
+
+### Email Settings (SMTP)
+
+| Setting | Required | Notes |
+|---------|----------|-------|
+| SMTP_HOST | Yes | SMTP server hostname |
+| SMTP_PORT | No | Default: 587 |
+| SMTP_USERNAME | Yes | SMTP authentication username |
+| SMTP_PASSWORD | Yes | SMTP authentication password |
+| SMTP_USE_TLS | No | Default: true |
+| SENDER_EMAIL | Yes | From email address |
+| SUBSCRIBER_EMAILS | Yes | Comma-separated recipient emails |
+
+### Snowflake Settings
+
+| Setting | Required | Notes |
+|---------|----------|-------|
+| SNOWFLAKE_ACCOUNT | Yes | Your Snowflake account identifier |
+| SNOWFLAKE_USER | Yes | Snowflake username |
+| SNOWFLAKE_PRIVATE_KEY_PATH | Yes | Path to unencrypted private key PEM file |
+| SNOWFLAKE_WAREHOUSE | Yes | Warehouse name |
+| SNOWFLAKE_DATABASE | No | Defaults to IC_CRM_DB |
+| SNOWFLAKE_SCHEMA | No | Defaults to IC_CRM |
+
 ## Troubleshooting
 
 **No emails received:**
-- Check SendGrid API key is valid
-- Verify sender email is authenticated in SendGrid
-- Check subscriber emails are correct
+- Verify SMTP host and port are correct
+- Check username and password
+- Ensure TLS/SSL settings match your server
+- Check firewall allows outbound connections
+- Verify subscriber emails are correct
 - Review function logs for errors
 
-**Connection errors:**
-- Verify Snowflake credentials
+**Snowflake connection errors:**
+- Verify private key file path is accessible
+- Check key format is PEM and unencrypted
+- Ensure public key is assigned to user in Snowflake
 - Check warehouse is running
 - Ensure network access to Snowflake
 
@@ -171,10 +255,13 @@ notification_engine/
 │   ├── processors/
 │   │   └── report_processor.py # Data consolidation
 │   └── email/
-│       ├── email_service.py   # SendGrid integration
+│       ├── email_service.py   # SMTP email service
 │       └── email_template.py  # HTML generation
 ├── scripts/
 │   └── setup_venv.sh
+├── run_local.py               # Local test runner
+├── .env.example               # Environment variables template
+├── local.settings.example.json # Azure Functions config template
 ├── host.json
 ├── requirements.txt
 └── README.md

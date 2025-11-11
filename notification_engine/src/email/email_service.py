@@ -1,17 +1,17 @@
 import logging
+import smtplib
 from datetime import date
 from typing import List, Dict, Any
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email, To, Content
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from ..config.settings import Settings
 from .email_template import EmailTemplate
 
 class EmailService:
-    """Handles email notifications via SendGrid"""
+    """Handles email notifications via SMTP"""
     
     def __init__(self):
         Settings.validate()
-        self.client = SendGridAPIClient(Settings.SENDGRID_API_KEY)
         self.sender = Settings.SENDER_EMAIL
         self.subscribers = [email.strip() for email in Settings.SUBSCRIBER_EMAILS if email.strip()]
     
@@ -31,20 +31,29 @@ class EmailService:
         subject = f"Daily Execution Report - {report_date.strftime('%Y-%m-%d')}"
         html_content = EmailTemplate.generate_report_html(report_date, report_data)
         
-        # Create email
-        message = Mail(
-            from_email=Email(self.sender),
-            to_emails=[To(email) for email in self.subscribers],
-            subject=subject,
-            html_content=Content("text/html", html_content)
-        )
+        # Create message
+        message = MIMEMultipart('alternative')
+        message['Subject'] = subject
+        message['From'] = self.sender
+        message['To'] = ', '.join(self.subscribers)
+        
+        # Attach HTML content
+        html_part = MIMEText(html_content, 'html')
+        message.attach(html_part)
         
         try:
-            response = self.client.send(message)
-            logging.info(f'Email sent successfully. Status code: {response.status_code}')
+            # Connect to SMTP server and send
+            with smtplib.SMTP(Settings.SMTP_HOST, Settings.SMTP_PORT) as server:
+                if Settings.SMTP_USE_TLS:
+                    server.starttls()
+                
+                server.login(Settings.SMTP_USERNAME, Settings.SMTP_PASSWORD)
+                server.sendmail(self.sender, self.subscribers, message.as_string())
+            
+            logging.info(f'Email sent successfully via SMTP ({Settings.SMTP_HOST}:{Settings.SMTP_PORT})')
             logging.info(f'Sent to: {", ".join(self.subscribers)}')
             
         except Exception as e:
-            logging.error(f'Failed to send email: {str(e)}')
+            logging.error(f'Failed to send email via SMTP: {str(e)}')
             raise
 
