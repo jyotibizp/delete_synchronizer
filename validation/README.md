@@ -30,16 +30,18 @@ python sync_validator.py
 
 ## What It Validates
 
-**One script validates everything:**
-- ✅ Row count comparison (Salesforce vs Snowflake base/final tables)
+**Smart, data-driven validation:**
+- ✅ Only validates objects that synced successfully (checks EXECUTION_TRACKER)
+- ✅ Row count comparison (Salesforce vs Snowflake staging/final tables)
 - ✅ Delete operation status (pending/applied)
 - ✅ History table tracking (deleted records)
-- ✅ One consolidated report saved to `EXECUTION_TRACKER`
+- ✅ Uses custom queries from ENTITYMAPPING table
+- ✅ Per-object reports saved to `EXECUTION_TRACKER`
 
 **Output:**
-- Saves to `EXECUTION_TRACKER` table with TYPE='SYNC_VALIDATION'
-- Console output with detailed summary
-- Status: `SUCCESS`, `WARNING`, or `PENDING`
+- One report per object in `EXECUTION_TRACKER` with TYPE='SYNC_VALIDATION'
+- Each object gets its own STATUS: `SUCCESS`, `WARNING`, or `PENDING`
+- Console output with per-object status
 
 ## Workflow
 
@@ -47,69 +49,100 @@ python sync_validator.py
 2. **Execute:** Run delete procedures in Snowflake  
 3. **After Delete:** Run `sync_validator.py` again to verify deletes processed
 
-## Object Mappings
+## Configuration
 
-| Salesforce | Snowflake Base | Snowflake Final |
-|-----------|----------------|-----------------|
-| Account | ACCOUNT | ACCOUNT_FINAL |
-| Contact | CONTACT | CONTACT_FINAL |
-| Opportunity | OPPORTUNITY | OPPORTUNITY_FINAL |
-| Legal_Entity__c | LEGALENTITY | LEGALENTITY_FINAL |
-| Investment__c | INVESTMENT | INVESTMENT_FINAL |
-| LP_Consultant_Relationship__c | LPCONRELATIONSHIP | LPCONRELATIONSHIP_FINAL |
-| Event | EVENT | EVENT_FINAL |
-| Task | TASK | TASK_FINAL |
-| Activity_Content__c | ACTIVITYCONTENT | ACTIVITYCONTENT_FINAL |
-| Fund__c | FUND | FUND_FINAL |
+Entity mappings are stored in the `ENTITYMAPPING` table with these columns:
+- `ENTITYNAME` - Entity identifier
+- `MAPPINGTO_SALESFORCE` - Salesforce object name
+- `SNOWFLAKE_TABLENAME` - Base table in Snowflake
+- `COUNT_SOQL` - Query to count rows in Salesforce
+- `COUNT_STAGING` - Query to count rows in Snowflake base table
+- `COUNT_FINAL` - Query to count rows in Snowflake final table
+
+The validator dynamically loads all entities from this table and executes the stored queries.
 
 ## How It Works
 
-All validation results are saved to the `EXECUTION_TRACKER` table:
+Each object gets its own validation report saved to `EXECUTION_TRACKER`:
 
 ```sql
--- View recent validations
-SELECT TYPE, STATUS, LOG_MESSAGE, INSERTED_DATE 
+-- View recent validations (all objects)
+SELECT OBJECT_NAME, STATUS, LOG_MESSAGE, INSERTED_DATE 
 FROM EXECUTION_TRACKER 
 WHERE TYPE = 'SYNC_VALIDATION'
 ORDER BY INSERTED_DATE DESC;
 
--- View detailed report (JSON)
-SELECT REPORT 
+-- View validation for specific object
+SELECT OBJECT_NAME, STATUS, LOG_MESSAGE, REPORT, INSERTED_DATE
 FROM EXECUTION_TRACKER 
 WHERE TYPE = 'SYNC_VALIDATION' 
+  AND OBJECT_NAME = 'Account'
 ORDER BY INSERTED_DATE DESC 
 LIMIT 1;
+
+-- Summary of latest validation run
+SELECT 
+    OBJECT_NAME,
+    STATUS,
+    LOG_MESSAGE,
+    INSERTED_DATE
+FROM EXECUTION_TRACKER
+WHERE TYPE = 'SYNC_VALIDATION'
+  AND INSERTED_DATE >= DATEADD(minute, -5, CURRENT_TIMESTAMP())
+ORDER BY OBJECT_NAME;
 ```
 
-**Status Values:**
+**Status Values (per object):**
 - `SUCCESS` - All counts match, no pending deletes
 - `WARNING` - Count mismatches detected
 - `PENDING` - Counts match but deletes are pending
 
-**Report JSON Structure:**
+**Per-Object Report Structure:**
 ```json
 {
   "validation_type": "SYNC_VALIDATION",
-  "timestamp": "2025-11-10T...",
-  "summary": {
-    "total_objects": 10,
-    "base_matches": 10,
-    "final_matches": 10,
-    "all_counts_match": true,
-    "total_pending_deletes": 0,
-    "total_deleted_in_history": 150
+  "timestamp": "2025-11-13T14:30:45.123456",
+  "entity_name": "Account",
+  "object": "Account",
+  "counts": {
+    "salesforce": 1250,
+    "snowflake_staging": 1250,
+    "snowflake_final": 1245
   },
-  "delete_tracker_summary": [...],
-  "validation_results": [...]
+  "matches": {
+    "staging_match": true,
+    "final_match": false
+  },
+  "differences": {
+    "staging_diff": 0,
+    "final_diff": -5
+  },
+  "deletes": {
+    "pending_deletes": 5,
+    "history_total": 50,
+    "history_deleted": 20
+  },
+  "status": "PENDING",
+  "log_message": "Account: Counts match but 5 deletes pending."
 }
 ```
 
-## Configuration
+## Environment Setup
 
-Update `config.py` with:
-- Salesforce private key path
-- Salesforce client ID
-- Salesforce username
+Set these environment variables or update `.env` file:
 
-Snowflake connection is pre-configured in the scripts.
+**Salesforce:**
+- `SF_CLIENT_ID` - Connected app client ID
+- `SF_USERNAME` - Salesforce username
+- `SF_LOGIN_URL` - Login URL (default: https://login.salesforce.com)
+- `SF_PRIVATE_KEY` - Private key content (or place in `certs/private.key`)
+
+**Snowflake:**
+- `SNOWFLAKE_ACCOUNT` - Account identifier
+- `SNOWFLAKE_USER` - Username
+- `SNOWFLAKE_ROLE` - Role to use
+- `SNOWFLAKE_WAREHOUSE` - Warehouse name
+- `SNOWFLAKE_DATABASE` - Database name
+- `SNOWFLAKE_SCHEMA` - Schema name
+- `SNOWFLAKE_PRIVATE_KEY` - Private key content (or place in `certs/rsa_key.p8`)
 

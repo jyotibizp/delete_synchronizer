@@ -26,18 +26,16 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     
     try:
         # Run validation
-        report_data = run_sync_validation()
+        result = run_sync_validation()
         
         # Return response
         response_body = {
-            'success': True,
-            'status': report_data['summary'].get('status', 'COMPLETED'),
-            'message': 'Validation completed successfully',
-            'summary': report_data['summary'],
-            'timestamp': report_data['timestamp']
+            'success': result['success'],
+            'message': result['message'],
+            'total_objects': result['total_objects']
         }
         
-        logging.info(f"Validation completed: {report_data['summary']}")
+        logging.info(f"Validation completed for {result['total_objects']} objects")
         
         return func.HttpResponse(
             body=json.dumps(response_body, indent=2),
